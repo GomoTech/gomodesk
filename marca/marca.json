@@ -1,0 +1,24 @@
+{
+  "versao_rustdesk": "1.5.3",
+  "revisao": 1,
+  "nome": "GomoDesk",
+  "prefixo": "gomodesk",
+  "empresa": "Gomo Tech",
+  "site": "https://gomox.com.br",
+  "pagina_download": "https://github.com/GomoTech/gomodesk/releases",
+  "servidor": "desk.gomox.com.br",
+  "porta": 21116,
+  "chave_publica": "tx5vaaR3W2kdCrXsNX8Q1qnIdxRdUHisiR/FmvNU1vM=",
+  "configuracao_cliente": {
+    "app-name": "GomoDesk",
+    "override-settings": {
+      "allow-auto-update": "N",
+      "enable-check-update": "N",
+      "enable-lan-discovery": "N"
+    },
+    "default-settings": {
+      "theme": "light",
+      "allow-remote-config-modification": "Y"
+    }
+  }
+}

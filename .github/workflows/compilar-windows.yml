@@ -1,0 +1,211 @@
+# Compila o GomoDesk para Windows (x64) a partir do RustDesk com a marca da Gomo Tech.
+# Baseado no flutter-build.yml do RustDesk 1.5.3 (AGPL-3) e no generator-windows.yml do rdgen (GPL-3).
+name: Compilar GomoDesk (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: Publicar como versão (release)
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths: ["marca/**", "patches/**", ".github/workflows/**"]
+
+permissions:
+  contents: write
+
+env:
+  SCITER_RUST_VERSION: "1.75"
+  LLVM_VERSION: "15.0.6"
+  FLUTTER_VERSION: "3.24.5"
+  VCPKG_BINARY_SOURCES: "clear"
+  VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
+
+jobs:
+  versao:
+    runs-on: ubuntu-latest
+    outputs:
+      rustdesk: ${{ steps.v.outputs.rustdesk }}
+      gomodesk: ${{ steps.v.outputs.gomodesk }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - id: v
+        run: |
+          python3 -c "import json; m=json.load(open('marca/marca.json')); print('rustdesk='+m['versao_rustdesk']); print('gomodesk=%s-g%s' % (m['versao_rustdesk'], m.get('revisao', 1)))" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  ponte:
+    needs: versao
+    uses: ./.github/workflows/bridge.yml
+    with:
+      versao: ${{ needs.versao.outputs.rustdesk }}
+
+  privacidade:
+    uses: ./.github/workflows/topmost.yml
+
+  windows:
+    name: GomoDesk ${{ needs.versao.outputs.gomodesk }} (Windows x64)
+    needs: [versao, ponte, privacidade]
+    runs-on: windows-2022
+    timeout-minutes: 240
+    steps:
+      - name: Variáveis do cache do Actions
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Código do RustDesk ${{ needs.versao.outputs.rustdesk }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: rustdesk/rustdesk
+          ref: refs/tags/${{ needs.versao.outputs.rustdesk }}
+          submodules: recursive
+
+      - name: Marca GomoDesk (este repositório)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          path: gomo
+
+      - name: Ponte Flutter-Rust
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ponte
+          path: ./
+
+      - name: Aplicar a marca
+        shell: bash
+        run: python gomo/marca/preparar.py --marca gomo/marca --saida-env "$GITHUB_ENV"
+
+      - name: LLVM e Clang
+        uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0 # v2.0.9
+        with:
+          version: ${{ env.LLVM_VERSION }}
+
+      - name: Flutter
+        uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225 # v2.12.0
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+
+      - name: Motor Flutter do RustDesk
+        run: |
+          flutter doctor -v
+          flutter precache --windows
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
+          mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+
+      - name: Correção do Flutter
+        shell: bash
+        run: |
+          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
+          cd $(dirname $(dirname $(which flutter)))
+          git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.SCITER_RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: windows-2022
+
+      - name: Restaurar bibliotecas (vcpkg)
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-x64-windows-static
+          restore-keys: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-
+
+      - name: vcpkg
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Bibliotecas (vcpkg install)
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        shell: bash
+        run: |
+          if ! $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do echo "$_1:"; cat "$_1"; done
+            exit 1
+          fi
+
+      - name: Guardar bibliotecas (vcpkg)
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-x64-windows-static
+
+      - name: Compilar
+        run: |
+          python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+          # driver de tela virtual (monitor virtual para PCs sem monitor)
+          Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
+          Expand-Archive usbmmidd_v2.zip -DestinationPath .
+          Remove-Item -Path usbmmidd_v2\Win32 -Recurse
+          Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
+          mv -Force .\usbmmidd_v2 ./rustdesk
+
+      - name: Runner.res (versão no executável portátil)
+        continue-on-error: true
+        shell: bash
+        run: |
+          runner_res=$(find . -name "Runner.res" | head -1)
+          if [ -n "$runner_res" ]; then cp "$runner_res" ./libs/portable/Runner.res; fi
+
+      - name: Tela de privacidade
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: topmost
+          path: ./rustdesk
+
+      - name: Configuração do cliente e nome do executável
+        shell: bash
+        run: |
+          cp custom_.txt ./rustdesk/custom_.txt
+          mv ./rustdesk/rustdesk.exe "./rustdesk/${APP_NOME}.exe"
+          ls ./rustdesk
+
+      - name: Executável único (autoextraível)
+        shell: bash
+        run: |
+          sed -i '/dpiAware/d' res/manifest.xml
+          pushd ./libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e "../../rustdesk/${APP_NOME}.exe"
+          popd
+          mkdir -p ./saida
+          mv ./target/release/rustdesk-portable-packer.exe "./saida/GomoDesk-${VERSAO_GOMODESK}-x86_64.exe"
+          sha256sum ./saida/*.exe | tee ./saida/sha256.txt
+
+      - name: Guardar o GomoDesk
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: GomoDesk-windows-x64
+          path: ./saida/*
+          retention-days: 30
+
+      - name: Publicar versão
+        if: github.event_name == 'push' || inputs.publicar
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        with:
+          tag_name: v${{ env.VERSAO_GOMODESK }}
+          name: GomoDesk ${{ env.VERSAO_GOMODESK }}
+          body: |
+            GomoDesk ${{ env.VERSAO_GOMODESK }} para Windows (x64), baseado no RustDesk ${{ env.VERSAO_RUSTDESK }}.
+            Código-fonte: RustDesk ${{ env.VERSAO_RUSTDESK }} + as alterações deste repositório (pastas marca/ e patches/), licença AGPL-3.0.
+          files: ./saida/*

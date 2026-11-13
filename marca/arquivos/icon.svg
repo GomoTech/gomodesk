@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><title>GomoDesk</title><defs><linearGradient id="gd" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#FFFFFF" stop-opacity=".25"/><stop offset="1" stop-color="#000000" stop-opacity=".35"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#7A0E1B"/>
+<rect x="0" y="0" width="512" height="512" rx="112" fill="url(#gd)" opacity=".35"/>
+<rect x="76" y="104" width="360" height="248" rx="30" fill="#FFFFFF"/>
+<rect x="104" y="132" width="304" height="192" rx="12" fill="#111111"/>
+<path d="M226 352 h60 l10 46 h-80 z" fill="#FFFFFF"/>
+<rect x="166" y="392" width="180" height="26" rx="13" fill="#FFFFFF"/>
+<path transform="translate(232.00,228.00) rotate(45)" d="M19.80,19.80 L19.80,66.00 L-19.80,66.00 L-19.80,19.80 L-66.00,19.80 L-66.00,-19.80 L-19.80,-19.80 L-19.80,-66.00 L19.80,-66.00 L19.80,-19.80 L66.00,-19.80 L66.00,19.80 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3.96" stroke-linejoin="round"/>
+<path transform="translate(322.00,168.00) rotate(45)" d="M9.30,9.30 L9.30,31.00 L-9.30,31.00 L-9.30,9.30 L-31.00,9.30 L-31.00,-9.30 L-9.30,-9.30 L-9.30,-31.00 L9.30,-31.00 L9.30,-9.30 L31.00,-9.30 L31.00,9.30 Z" fill="#7A0E1B" stroke="#7A0E1B" stroke-width="1.86" stroke-linejoin="round"/>
+<g transform="translate(306,240) rotate(-16) scale(.88)">
+<path d="M0 0 L0 112 L28 86 L48 130 L70 120 L50 77 L88 74 Z" fill="#7A0E1B" stroke="#FFFFFF" stroke-width="14" stroke-linejoin="round" paint-order="stroke"/>
+</g></svg>
